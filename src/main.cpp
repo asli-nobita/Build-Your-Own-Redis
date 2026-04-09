@@ -7,10 +7,10 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include "header.h"
 #include <unordered_map>
 
-std::unordered_map<std::string, std::string> db;
+#include "header.h"
+std::unordered_map<std::string, DBEntry> db;
 
 void* handle_client(void* sock_fd) {
     char buffer[1024];
@@ -21,34 +21,53 @@ void* handle_client(void* sock_fd) {
             break;
         }
         // send(client_fd, "+PONG\r\n", 7, 0); 
-        try { 
+        try {
             auto [cmd, args] = parse_input(buffer, bytes_received);
-            if (cmd == "ping") { 
-                send(client_fd, "+PONG\r\n", 7, 0); 
-            } 
-            else if (cmd == "echo") { 
-                for(auto& arg : args) { 
+            if (cmd == "ping") {
+                send(client_fd, "+PONG\r\n", 7, 0);
+            }
+            else if (cmd == "echo") {
+                for (auto& arg : args) {
                     std::string msg = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
                     send(client_fd, msg.c_str(), msg.length(), 0);
                 }
             }
-            else if (cmd == "set") { 
-                db[args[0]] = args[1];
+            else if (cmd == "set") {
+                db[args[0]].value = args[1];
+                if (args.size() > 2) {
+                    // extra commands 
+                    if (args[2] == "ex") {
+                        db[args[0]].has_expiry = true;
+                        db[args[0]].expiry_time = std::chrono::steady_clock::now() + std::chrono::seconds(std::stoll(args[3]));
+                    }
+                    else if (args[2] == "px") {
+                        db[args[0]].has_expiry = true;
+                        db[args[0]].expiry_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::stoll(args[3]));
+                    }
+                }
                 send(client_fd, "+OK\r\n", 5, 0);
-            } 
-            else if (cmd == "get") { 
-                if (db.count(args[0])) { 
-                    auto value = db[args[0]]; 
-                    std::string msg = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
-                    send(client_fd, msg.c_str(), msg.length(), 0);
-                } 
-                else { 
+            }
+            else if (cmd == "get") {
+                if (db.count(args[0])) {
+                    auto entry = db[args[0]];
+                    if (entry.has_expiry && entry.expiry_time < std::chrono::steady_clock::now()) {
+                        // expired entry 
+                        db.erase(args[0]);
+                        send(client_fd, "$-1\r\n", 5, 0);
+                    }
+                    else {
+                        auto value = entry.value;
+                        std::string msg = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
+                        send(client_fd, msg.c_str(), msg.length(), 0);
+                    }
+                }
+                else {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
             }
-        } 
-        catch(std::invalid_argument& e) { 
-            std::cerr << e.what() << std::endl; 
+        }
+        catch (std::invalid_argument& e) {
+            std::cerr << e.what() << std::endl;
         }
     }
     close(client_fd);
@@ -101,7 +120,7 @@ int main(int argc, char** argv) {
 
     while (true) {
         int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len);
-        auto t = pthread_create(&threads[threadId++], NULL, &handle_client, &client_fd); 
+        auto t = pthread_create(&threads[threadId++], NULL, &handle_client, &client_fd);
     }
 
     // std::cout << "Client connected\n";
