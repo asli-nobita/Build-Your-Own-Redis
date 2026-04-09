@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include "header.h"
 
 void* handle_client(void* sock_fd) {
     char buffer[1024];
@@ -16,7 +17,22 @@ void* handle_client(void* sock_fd) {
         if (bytes_received <= 0) {
             break;
         }
-        send(client_fd, "+PONG\r\n", 7, 0);
+        // send(client_fd, "+PONG\r\n", 7, 0); 
+        try { 
+            auto [cmd, args] = parse_input(buffer, bytes_received);
+            if (cmd == "ping") { 
+                send(client_fd, "+PONG\r\n", 7, 0); 
+            } 
+            else if (cmd == "echo") { 
+                for(auto& arg : args) { 
+                    std::string msg = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
+                    send(client_fd, msg.c_str(), msg.length(), 0);
+                }
+            }
+        } 
+        catch(std::invalid_argument& e) { 
+            std::cerr << e.what() << std::endl; 
+        }
     }
     close(client_fd);
 }
