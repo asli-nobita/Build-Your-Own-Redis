@@ -8,6 +8,19 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+void* handle_client(void* sock_fd) {
+    char buffer[1024];
+    int client_fd = *(int*)sock_fd;
+    while (true) {
+        ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer), 0);
+        if (bytes_received <= 0) {
+            break;
+        }
+        send(client_fd, "+PONG\r\n", 7, 0);
+    }
+    close(client_fd);
+}
+
 int main(int argc, char** argv) {
     // Flush after every std::cout / std::cerr
     std::cout << std::unitbuf;
@@ -50,17 +63,14 @@ int main(int argc, char** argv) {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     std::cout << "Logs from your program will appear here!\n";
 
-    // Uncomment the code below to pass the first stage
+    pthread_t threads[10];
+    int threadId = 0;
 
-    int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len);
-    char buffer[1024];
     while (true) {
-        ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer), 0);
-        if (bytes_received <= 0) {
-            break;
-        }
-        send(client_fd, "+PONG\r\n", 7, 0);
+        int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len);
+        auto t = pthread_create(&threads[threadId++], NULL, &handle_client, &client_fd); 
     }
+
     // std::cout << "Client connected\n";
 
     close(server_fd);
