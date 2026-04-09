@@ -8,6 +8,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include "header.h"
+#include <unordered_map>
+
+std::unordered_map<std::string, std::string> db;
 
 void* handle_client(void* sock_fd) {
     char buffer[1024];
@@ -27,6 +30,20 @@ void* handle_client(void* sock_fd) {
                 for(auto& arg : args) { 
                     std::string msg = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
                     send(client_fd, msg.c_str(), msg.length(), 0);
+                }
+            }
+            else if (cmd == "set") { 
+                db[args[0]] = args[1];
+                send(client_fd, "+OK\r\n", 5, 0);
+            } 
+            else if (cmd == "get") { 
+                if (db.count(args[0])) { 
+                    auto value = db[args[0]]; 
+                    std::string msg = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
+                    send(client_fd, msg.c_str(), msg.length(), 0);
+                } 
+                else { 
+                    send(client_fd, "$-1\r\n", 5, 0);
                 }
             }
         } 
