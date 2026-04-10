@@ -82,6 +82,18 @@ void* handle_client(void* sock_fd) {
                 auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
+            else if (cmd == "lpop") { 
+                auto& ls = lists[args[0]]; 
+                if (ls.size() == 0) { 
+                    send(client_fd, "$-1\r\n", 5, 0);
+                }
+                else { 
+                    auto e = ls.front(); 
+                    ls.pop_front();
+                    auto msg = to_bulk_string(e); 
+                    send(client_fd, msg.c_str(), msg.length(), 0);
+                }
+            }
             else if (cmd == "lrange") {
                 auto& ls = lists[args[0]];
                 int n = ls.size();

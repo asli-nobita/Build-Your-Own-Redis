@@ -105,6 +105,7 @@ std::pair<std::string, std::vector<std::string>> parse_input(char* input, int n)
     return { cmd, args };
 }
 
+// Converts an array of std::string elements to a RESP array string
 std::string to_resp_array(std::vector<std::string>& elements) {
     std::string msg = "*" + std::to_string(elements.size()) + "\r\n";
     for (auto e : elements) {
@@ -113,10 +114,12 @@ std::string to_resp_array(std::vector<std::string>& elements) {
     return msg; 
 }
 
+// Converts an integer value to a RESP integer string
 std::string to_resp_integer(int n) {
     return ":" + std::to_string(n) + "\r\n";
 }
 
+// Converts a std::string to a RESP bulk string
 std::string to_bulk_string(std::string& s) { 
     return "$" + std::to_string(s.length()) + "\r\n" + s + "\r\n";
 }
