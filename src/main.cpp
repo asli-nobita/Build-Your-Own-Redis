@@ -13,7 +13,7 @@
 #include "header.h"
 
 std::unordered_map<std::string, DBEntry> db;
-std::unordered_map<std::string, std::list<std::string>> lists; 
+std::unordered_map<std::string, std::vector<std::string>> lists;
 
 void* handle_client(void* sock_fd) {
     char buffer[1024];
@@ -68,11 +68,24 @@ void* handle_client(void* sock_fd) {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
             }
-            else if (cmd == "rpush") { 
-                for(int i = 1; i < args.size(); i++) { 
+            else if (cmd == "rpush") {
+                for (int i = 1; i < args.size(); i++) {
                     lists[args[0]].push_back(args[i]);
                 }
                 std::string msg = ":" + std::to_string(lists[args[0]].size()) + "\r\n";
+                send(client_fd, msg.c_str(), msg.length(), 0);
+            }
+            else if (cmd == "lrange") {
+                auto& ls = lists[args[0]];
+                int st = std::min((int)ls.size(), std::stoi(args[1])), en = std::min((int)ls.size() - 1, std::stoi(args[2]));
+                std::vector<std::string> elements;
+                for (int i = st; i <= en; i++) {
+                    elements.push_back(ls[i]);
+                }
+                std::string msg = "*" + std::to_string(elements.size()) + "\r\n"; 
+                for (auto e : elements) { 
+                    msg += "$" + std::to_string(e.length()) + "\r\n" + e + "\r\n";
+                } 
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
         }
