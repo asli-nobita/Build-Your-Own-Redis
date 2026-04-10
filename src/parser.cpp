@@ -7,7 +7,7 @@ std::pair<std::string, std::vector<std::string>> parse_input(char* input, int n)
     int arr_size = 0;
     int arg_size = 0;
     std::string cur_arg;
-    for (int i = 0; i < n; i++) { 
+    for (int i = 0; i < n; i++) {
         char c = input[i];
         switch (cur_state) {
             case 0:
@@ -101,6 +101,22 @@ std::pair<std::string, std::vector<std::string>> parse_input(char* input, int n)
                     throw std::invalid_argument("Invalid RESP string.\n");
                 }
         }
-    } 
-    return {cmd, args};
+    }
+    return { cmd, args };
+}
+
+std::string to_resp_array(std::vector<std::string>& elements) {
+    std::string msg = "*" + std::to_string(elements.size()) + "\r\n";
+    for (auto e : elements) {
+        msg += to_bulk_string(e);
+    }
+    return msg; 
+}
+
+std::string to_resp_integer(int n) {
+    return ":" + std::to_string(n) + "\r\n";
+}
+
+std::string to_bulk_string(std::string& s) { 
+    return "$" + std::to_string(s.length()) + "\r\n" + s + "\r\n";
 }

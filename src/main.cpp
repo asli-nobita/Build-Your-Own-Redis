@@ -31,7 +31,7 @@ void* handle_client(void* sock_fd) {
             }
             else if (cmd == "echo") {
                 for (auto& arg : args) {
-                    std::string msg = "$" + std::to_string(arg.length()) + "\r\n" + arg + "\r\n";
+                    auto msg = to_bulk_string(arg);
                     send(client_fd, msg.c_str(), msg.length(), 0);
                 }
             }
@@ -60,7 +60,7 @@ void* handle_client(void* sock_fd) {
                     }
                     else {
                         auto value = entry.value;
-                        std::string msg = "$" + std::to_string(value.length()) + "\r\n" + value + "\r\n";
+                        auto msg = to_bulk_string(value);
                         send(client_fd, msg.c_str(), msg.length(), 0);
                     }
                 }
@@ -72,14 +72,14 @@ void* handle_client(void* sock_fd) {
                 for (int i = 1; i < args.size(); i++) {
                     lists[args[0]].push_back(args[i]);
                 }
-                std::string msg = ":" + std::to_string(lists[args[0]].size()) + "\r\n";
+                auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lpush") { 
                 for (int i = 1; i < args.size(); i++) {
                     lists[args[0]].push_front(args[i]);
                 }
-                std::string msg = ":" + std::to_string(lists[args[0]].size()) + "\r\n";
+                auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lrange") {
@@ -98,10 +98,11 @@ void* handle_client(void* sock_fd) {
                 for (int i = st; i <= en; i++) {
                     elements.push_back(*next(ls.begin(), i));
                 }
-                std::string msg = "*" + std::to_string(elements.size()) + "\r\n"; 
-                for (auto e : elements) { 
-                    msg += "$" + std::to_string(e.length()) + "\r\n" + e + "\r\n";
-                } 
+                auto msg = to_resp_array(elements);
+                send(client_fd, msg.c_str(), msg.length(), 0);
+            }
+            else if (cmd == "llen") { 
+                auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
         }
