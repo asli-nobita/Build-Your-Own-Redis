@@ -69,7 +69,9 @@ void* handle_client(void* sock_fd) {
                 }
             }
             else if (cmd == "rpush") { 
-                lists[args[0]].push_back(args[1]); 
+                for(int i = 1; i < args.size(); i++) { 
+                    lists[args[0]].push_back(args[i]);
+                }
                 std::string msg = ":" + std::to_string(lists[args[0]].size()) + "\r\n";
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
