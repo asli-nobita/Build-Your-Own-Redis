@@ -89,7 +89,10 @@ void* handle_client(void* sock_fd) {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
                 else {
-                    int num_removed = std::min(n, std::stoi(args[1]));
+                    int num_removed = 1; 
+                    if (args.size() == 2) { 
+                        num_removed = std::min(n, std::stoi(args[1]));
+                    }
                     std::vector<std::string> removed; 
                     for (int i = 0; i < num_removed; i++) {
                         auto e = ls.front();
