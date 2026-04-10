@@ -13,7 +13,7 @@
 #include "header.h"
 
 std::unordered_map<std::string, DBEntry> db;
-std::unordered_map<std::string, std::vector<std::string>> lists;
+std::unordered_map<std::string, std::list<std::string>> lists;
 
 void* handle_client(void* sock_fd) {
     char buffer[1024];
@@ -75,6 +75,13 @@ void* handle_client(void* sock_fd) {
                 std::string msg = ":" + std::to_string(lists[args[0]].size()) + "\r\n";
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
+            else if (cmd == "lpush") { 
+                for (int i = 1; i < args.size(); i++) {
+                    lists[args[0]].push_front(args[i]);
+                }
+                std::string msg = ":" + std::to_string(lists[args[0]].size()) + "\r\n";
+                send(client_fd, msg.c_str(), msg.length(), 0);
+            }
             else if (cmd == "lrange") {
                 auto& ls = lists[args[0]];
                 int n = ls.size();
@@ -89,7 +96,7 @@ void* handle_client(void* sock_fd) {
                 st = std::min(n, st); en = std::min(n - 1, en); 
                 std::vector<std::string> elements;
                 for (int i = st; i <= en; i++) {
-                    elements.push_back(ls[i]);
+                    elements.push_back(*next(ls.begin(), i));
                 }
                 std::string msg = "*" + std::to_string(elements.size()) + "\r\n"; 
                 for (auto e : elements) { 
