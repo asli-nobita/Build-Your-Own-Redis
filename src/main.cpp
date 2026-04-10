@@ -77,7 +77,16 @@ void* handle_client(void* sock_fd) {
             }
             else if (cmd == "lrange") {
                 auto& ls = lists[args[0]];
-                int st = std::min((int)ls.size(), std::stoi(args[1])), en = std::min((int)ls.size() - 1, std::stoi(args[2]));
+                int n = ls.size();
+                int st = std::stoi(args[1]), en = std::stoi(args[2]); 
+                // negative indices 
+                if (st < 0) { 
+                    st = std::max(0, st + n);
+                } 
+                if (en < 0) { 
+                    en = std::max(0, en + n);
+                }
+                st = std::min(n, st); en = std::min(n - 1, en); 
                 std::vector<std::string> elements;
                 for (int i = st; i <= en; i++) {
                     elements.push_back(ls[i]);
