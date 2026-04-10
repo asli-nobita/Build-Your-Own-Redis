@@ -84,22 +84,27 @@ void* handle_client(void* sock_fd) {
             }
             else if (cmd == "lpop") {
                 auto& ls = lists[args[0]];
-                int n = ls.size(); 
+                int n = ls.size();
                 if (n == 0) {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
                 else {
-                    int num_removed = 1; 
-                    if (args.size() == 2) { 
-                        num_removed = std::min(n, std::stoi(args[1]));
+                    std::string msg; 
+                    if (args.size() >= 2) {
+                        int num_removed = std::min(n, std::stoi(args[1]));
+                        std::vector<std::string> removed;
+                        for (int i = 0; i < num_removed; i++) {
+                            auto e = ls.front();
+                            ls.pop_front();
+                            removed.push_back(e);
+                        }
+                        msg = to_resp_array(removed);
                     }
-                    std::vector<std::string> removed; 
-                    for (int i = 0; i < num_removed; i++) {
+                    else {
                         auto e = ls.front();
                         ls.pop_front();
-                        removed.push_back(e);
+                        msg = to_bulk_string(e);
                     }
-                    auto msg = to_resp_array(removed);
                     send(client_fd, msg.c_str(), msg.length(), 0);
                 }
             }
