@@ -8,9 +8,12 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unordered_map>
+#include <list>
 
 #include "header.h"
+
 std::unordered_map<std::string, DBEntry> db;
+std::unordered_map<std::string, std::list<std::string>> lists; 
 
 void* handle_client(void* sock_fd) {
     char buffer[1024];
@@ -64,6 +67,11 @@ void* handle_client(void* sock_fd) {
                 else {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
+            }
+            else if (cmd == "rpush") { 
+                lists[args[0]].push_back(args[1]); 
+                std::string msg = ":" + std::to_string(lists[args[0]].size()) + "\r\n";
+                send(client_fd, msg.c_str(), msg.length(), 0);
             }
         }
         catch (std::invalid_argument& e) {
