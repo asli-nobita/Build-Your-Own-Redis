@@ -75,37 +75,43 @@ void* handle_client(void* sock_fd) {
                 auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
-            else if (cmd == "lpush") { 
+            else if (cmd == "lpush") {
                 for (int i = 1; i < args.size(); i++) {
                     lists[args[0]].push_front(args[i]);
                 }
                 auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
-            else if (cmd == "lpop") { 
-                auto& ls = lists[args[0]]; 
-                if (ls.size() == 0) { 
+            else if (cmd == "lpop") {
+                auto& ls = lists[args[0]];
+                int n = ls.size(); 
+                if (n == 0) {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
-                else { 
-                    auto e = ls.front(); 
-                    ls.pop_front();
-                    auto msg = to_bulk_string(e); 
+                else {
+                    int num_removed = std::min(n, std::stoi(args[1]));
+                    std::vector<std::string> removed; 
+                    for (int i = 0; i < num_removed; i++) {
+                        auto e = ls.front();
+                        ls.pop_front();
+                        removed.push_back(e);
+                    }
+                    auto msg = to_resp_array(removed);
                     send(client_fd, msg.c_str(), msg.length(), 0);
                 }
             }
             else if (cmd == "lrange") {
                 auto& ls = lists[args[0]];
                 int n = ls.size();
-                int st = std::stoi(args[1]), en = std::stoi(args[2]); 
+                int st = std::stoi(args[1]), en = std::stoi(args[2]);
                 // negative indices 
-                if (st < 0) { 
+                if (st < 0) {
                     st = std::max(0, st + n);
-                } 
-                if (en < 0) { 
+                }
+                if (en < 0) {
                     en = std::max(0, en + n);
                 }
-                st = std::min(n, st); en = std::min(n - 1, en); 
+                st = std::min(n, st); en = std::min(n - 1, en);
                 std::vector<std::string> elements;
                 for (int i = st; i <= en; i++) {
                     elements.push_back(*next(ls.begin(), i));
@@ -113,7 +119,7 @@ void* handle_client(void* sock_fd) {
                 auto msg = to_resp_array(elements);
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
-            else if (cmd == "llen") { 
+            else if (cmd == "llen") {
                 auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
