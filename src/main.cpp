@@ -129,13 +129,13 @@ void* handle_client(void* sock_fd) {
                 std::string msg;
                 // unique lock is used in combination with condition variables, or when manual locking and unlocking is needed
                 std::unique_lock<std::mutex> lock(mutex);
-                int timeout = std::stoi(args[1]);
+                auto timeout = std::stod(args[1]);
                 bool found = true;
                 if (timeout == 0) {
                     cv.wait(lock, [&]() { return !lists[args[0]].empty(); });
                 }
                 else {
-                    found = cv.wait_for(lock, std::chrono::seconds(timeout), [&]() { return !lists[args[0]].empty(); });
+                    found = cv.wait_for(lock, std::chrono::milliseconds((int)(timeout * 1000)), [&]() { return !lists[args[0]].empty(); });
                 }
                 if (found) {
                     auto& ls = lists[args[0]];
