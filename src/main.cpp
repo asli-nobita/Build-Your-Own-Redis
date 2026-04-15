@@ -9,11 +9,15 @@
 #include <netdb.h>
 #include <unordered_map>
 #include <list>
+#include <mutex> 
+#include <condition_variable>
 
 #include "header.h"
 
 std::unordered_map<std::string, DBEntry> db;
 std::unordered_map<std::string, std::list<std::string>> lists;
+std::mutex mutex;
+std::condition_variable cv;
 
 void* handle_client(void* sock_fd) {
     char buffer[1024];
@@ -36,6 +40,8 @@ void* handle_client(void* sock_fd) {
                 }
             }
             else if (cmd == "set") {
+                // lock_guard is used for starightforward critical sections
+                std::lock_guard<std::mutex> lock(mutex);
                 db[args[0]].value = args[1];
                 if (args.size() > 2) {
                     // extra commands 
@@ -48,6 +54,7 @@ void* handle_client(void* sock_fd) {
                         db[args[0]].expiry_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::stoll(args[3]));
                     }
                 }
+                cv.notify_all();
                 send(client_fd, "+OK\r\n", 5, 0);
             }
             else if (cmd == "get") {
@@ -69,16 +76,24 @@ void* handle_client(void* sock_fd) {
                 }
             }
             else if (cmd == "rpush") {
-                for (int i = 1; i < args.size(); i++) {
-                    lists[args[0]].push_back(args[i]);
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    for (int i = 1; i < args.size(); i++) {
+                        lists[args[0]].push_back(args[i]);
+                    }
                 }
+                cv.notify_all();
                 auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lpush") {
-                for (int i = 1; i < args.size(); i++) {
-                    lists[args[0]].push_front(args[i]);
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    for (int i = 1; i < args.size(); i++) {
+                        lists[args[0]].push_front(args[i]);
+                    }
                 }
+                cv.notify_all();
                 auto msg = to_resp_integer(lists[args[0]].size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
@@ -89,8 +104,9 @@ void* handle_client(void* sock_fd) {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
                 else {
-                    std::string msg; 
+                    std::string msg;
                     if (args.size() >= 2) {
+                        std::lock_guard<std::mutex> lock(mutex);
                         int num_removed = std::min(n, std::stoi(args[1]));
                         std::vector<std::string> removed;
                         for (int i = 0; i < num_removed; i++) {
@@ -98,6 +114,7 @@ void* handle_client(void* sock_fd) {
                             ls.pop_front();
                             removed.push_back(e);
                         }
+                        cv.notify_all();
                         msg = to_resp_array(removed);
                     }
                     else {
@@ -107,6 +124,31 @@ void* handle_client(void* sock_fd) {
                     }
                     send(client_fd, msg.c_str(), msg.length(), 0);
                 }
+            }
+            else if (cmd == "blpop") {
+                std::string msg;
+                // unique lock is used in combination with condition variables, or when manual locking and unlocking is needed
+                std::unique_lock<std::mutex> lock(mutex);
+                int timeout = std::stoi(args[1]);
+                bool found = true;
+                if (timeout == 0) {
+                    cv.wait(lock, [&]() { return !lists[args[0]].empty(); });
+                }
+                else {
+                    found = cv.wait_for(lock, std::chrono::seconds(timeout), [&]() { return !lists[args[0]].empty(); });
+                }
+                if (found) {
+                    auto& ls = lists[args[0]];
+                    auto ele = ls.front();
+                    ls.pop_front();
+                    std::vector<std::string> v{ args[0], ele };
+                    msg = to_resp_array(v);
+                }
+                else {
+                    msg = "*-1\r\n";
+                }
+                lock.unlock();
+                send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lrange") {
                 auto& ls = lists[args[0]];
