@@ -172,6 +172,10 @@ void* handle_client(void* sock_fd) {
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lrange") {
+                if (!std::holds_alternative<std::list<std::string>>(db[args[0]].value)) {
+                    db[args[0]].type = "list";
+                    db[args[0]].value = std::list<std::string>();
+                }
                 auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
                 int n = ls.size();
                 int st = std::stoi(args[1]), en = std::stoi(args[2]);
@@ -191,6 +195,10 @@ void* handle_client(void* sock_fd) {
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "llen") {
+                if (!std::holds_alternative<std::list<std::string>>(db[args[0]].value)) {
+                    db[args[0]].type = "list";
+                    db[args[0]].value = std::list<std::string>();
+                }
                 auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
                 auto msg = to_resp_integer(ls.size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
