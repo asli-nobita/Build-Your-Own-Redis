@@ -16,7 +16,7 @@
 
 #include "header.h"
 
-using value_type = std::variant<std::string, std::list<std::string>, std::set<std::string>>;
+using value_type = std::variant<std::string, std::list<std::string>, std::set<std::string>, RedisStream>;
 
 std::unordered_map<std::string, DBEntry<value_type>> db;
 // std::unordered_map<std::string, std::list<std::string>> db;
@@ -207,6 +207,22 @@ void* handle_client(void* sock_fd) {
                 // get type of value stored with this key 
                 std::string type = db[args[0]].type;
                 std::string msg = "+" + type + "\r\n";
+                send(client_fd, msg.c_str(), msg.length(), 0);
+            }
+            else if (cmd == "xadd") {
+                auto stream_key = args[0], entryID = args[1];
+                if (!std::holds_alternative<RedisStream>(db[stream_key].value)) {
+                    db[stream_key].type = "stream";
+                    db[stream_key].value = RedisStream();
+                }   
+                auto& stream = std::get<std::unordered_map<std::string, RedisEntry>>(db[stream_key].value); 
+                if (stream.find(entryID) == stream.end()) { 
+                }
+                int n = args.size(); 
+                for (int i = 2; i < n - 1; i += 2) { 
+                    stream[entryID].kv_pairs.push_back({args[i], args[i+1]});
+                }
+                auto msg = to_bulk_string(entryID); 
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
         }
