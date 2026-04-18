@@ -94,8 +94,8 @@ void* handle_client(void* sock_fd) {
                         ls.push_back(args[i]);
                     }
                 }
-                cv.notify_all();
                 auto msg = to_resp_integer(ls.size());
+                cv.notify_all();
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lpush") {
@@ -112,8 +112,8 @@ void* handle_client(void* sock_fd) {
                         ls.push_front(args[i]);
                     }
                 }
-                cv.notify_all();
                 auto msg = to_resp_integer(ls.size());
+                cv.notify_all();
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lpop") {
@@ -123,8 +123,8 @@ void* handle_client(void* sock_fd) {
                 std::string msg;
                 auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
                 int n = ls.size();
+                std::lock_guard<std::mutex> lock(mutex);
                 if (args.size() >= 2) {
-                    std::lock_guard<std::mutex> lock(mutex);
                     int num_removed = std::min(n, std::stoi(args[1]));
                     std::vector<std::string> removed;
                     for (int i = 0; i < num_removed; i++) {
@@ -132,7 +132,6 @@ void* handle_client(void* sock_fd) {
                         ls.pop_front();
                         removed.push_back(e);
                     }
-                    cv.notify_all();
                     msg = to_resp_array(removed);
                 }
                 else {
@@ -140,6 +139,7 @@ void* handle_client(void* sock_fd) {
                     ls.pop_front();
                     msg = to_bulk_string(e);
                 }
+                cv.notify_all();
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "blpop") {
