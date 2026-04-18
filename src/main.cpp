@@ -9,13 +9,17 @@
 #include <netdb.h>
 #include <unordered_map>
 #include <list>
+#include <set>
 #include <mutex> 
 #include <condition_variable>
+#include <variant>
 
 #include "header.h"
 
-std::unordered_map<std::string, DBEntry> db;
-std::unordered_map<std::string, std::list<std::string>> lists;
+using value_type = std::variant<std::string, std::list<std::string>, std::set<std::string>>;
+
+std::unordered_map<std::string, DBEntry<value_type>> db;
+// std::unordered_map<std::string, std::list<std::string>> db;
 std::mutex mutex;
 std::condition_variable cv;
 
@@ -43,6 +47,7 @@ void* handle_client(void* sock_fd) {
                 // lock_guard is used for starightforward critical sections
                 std::lock_guard<std::mutex> lock(mutex);
                 db[args[0]].value = args[1];
+                db[args[0]].type = "string";
                 if (args.size() > 2) {
                     // extra commands 
                     if (args[2] == "ex") {
@@ -66,7 +71,7 @@ void* handle_client(void* sock_fd) {
                         send(client_fd, "$-1\r\n", 5, 0);
                     }
                     else {
-                        auto value = entry.value;
+                        auto value = std::get<std::string>(entry.value);
                         auto msg = to_bulk_string(value);
                         send(client_fd, msg.c_str(), msg.length(), 0);
                     }
@@ -76,54 +81,66 @@ void* handle_client(void* sock_fd) {
                 }
             }
             else if (cmd == "rpush") {
+                if (!std::holds_alternative<std::list<std::string>>(db[args[0]].value)) {
+                    db[args[0]].type = "list";
+                    db[args[0]].value = std::list<std::string>();
+                }
+                auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
                 {
                     std::lock_guard<std::mutex> lock(mutex);
+                    if (db[args[0]].type == "none")
+                        db[args[0]].type = "list";
                     for (int i = 1; i < args.size(); i++) {
-                        lists[args[0]].push_back(args[i]);
+                        ls.push_back(args[i]);
                     }
                 }
                 cv.notify_all();
-                auto msg = to_resp_integer(lists[args[0]].size());
+                auto msg = to_resp_integer(ls.size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lpush") {
+                if (!std::holds_alternative<std::list<std::string>>(db[args[0]].value)) {
+                    db[args[0]].type = "list";
+                    db[args[0]].value = std::list<std::string>();
+                }
+                auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
                 {
                     std::lock_guard<std::mutex> lock(mutex);
+                    if (db[args[0]].type == "none")
+                        db[args[0]].type = "list";
                     for (int i = 1; i < args.size(); i++) {
-                        lists[args[0]].push_front(args[i]);
+                        ls.push_front(args[i]);
                     }
                 }
                 cv.notify_all();
-                auto msg = to_resp_integer(lists[args[0]].size());
+                auto msg = to_resp_integer(ls.size());
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lpop") {
-                auto& ls = lists[args[0]];
-                int n = ls.size();
-                if (n == 0) {
+                if (db.find(args[0]) == db.end()) {
                     send(client_fd, "$-1\r\n", 5, 0);
                 }
-                else {
-                    std::string msg;
-                    if (args.size() >= 2) {
-                        std::lock_guard<std::mutex> lock(mutex);
-                        int num_removed = std::min(n, std::stoi(args[1]));
-                        std::vector<std::string> removed;
-                        for (int i = 0; i < num_removed; i++) {
-                            auto e = ls.front();
-                            ls.pop_front();
-                            removed.push_back(e);
-                        }
-                        cv.notify_all();
-                        msg = to_resp_array(removed);
-                    }
-                    else {
+                std::string msg;
+                auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
+                int n = ls.size();
+                if (args.size() >= 2) {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    int num_removed = std::min(n, std::stoi(args[1]));
+                    std::vector<std::string> removed;
+                    for (int i = 0; i < num_removed; i++) {
                         auto e = ls.front();
                         ls.pop_front();
-                        msg = to_bulk_string(e);
+                        removed.push_back(e);
                     }
-                    send(client_fd, msg.c_str(), msg.length(), 0);
+                    cv.notify_all();
+                    msg = to_resp_array(removed);
                 }
+                else {
+                    auto e = ls.front();
+                    ls.pop_front();
+                    msg = to_bulk_string(e);
+                }
+                send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "blpop") {
                 std::string msg;
@@ -131,14 +148,18 @@ void* handle_client(void* sock_fd) {
                 std::unique_lock<std::mutex> lock(mutex);
                 auto timeout = std::stod(args[1]);
                 bool found = true;
+                if (!std::holds_alternative<std::list<std::string>>(db[args[0]].value)) {
+                    db[args[0]].type = "list";
+                    db[args[0]].value = std::list<std::string>();
+                }
+                auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
                 if (timeout == 0) {
-                    cv.wait(lock, [&]() { return !lists[args[0]].empty(); });
+                    cv.wait(lock, [&]() { return !ls.empty(); });
                 }
                 else {
-                    found = cv.wait_for(lock, std::chrono::milliseconds((int)(timeout * 1000)), [&]() { return !lists[args[0]].empty(); });
+                    found = cv.wait_for(lock, std::chrono::milliseconds((int)(timeout * 1000)), [&]() { return !ls.empty(); });
                 }
                 if (found) {
-                    auto& ls = lists[args[0]];
                     auto ele = ls.front();
                     ls.pop_front();
                     std::vector<std::string> v{ args[0], ele };
@@ -151,7 +172,7 @@ void* handle_client(void* sock_fd) {
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "lrange") {
-                auto& ls = lists[args[0]];
+                auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
                 int n = ls.size();
                 int st = std::stoi(args[1]), en = std::stoi(args[2]);
                 // negative indices 
@@ -170,7 +191,14 @@ void* handle_client(void* sock_fd) {
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
             else if (cmd == "llen") {
-                auto msg = to_resp_integer(lists[args[0]].size());
+                auto& ls = std::get<std::list<std::string>>(db[args[0]].value);
+                auto msg = to_resp_integer(ls.size());
+                send(client_fd, msg.c_str(), msg.length(), 0);
+            }
+            else if (cmd == "type") {
+                // get type of value stored with this key 
+                std::string type = db[args[0]].type;
+                std::string msg = "+" + type + "\r\n";
                 send(client_fd, msg.c_str(), msg.length(), 0);
             }
         }

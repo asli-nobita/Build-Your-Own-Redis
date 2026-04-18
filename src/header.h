@@ -5,8 +5,10 @@
 #include <vector>
 #include <chrono>
 
+template <typename T>
 struct DBEntry { 
-    std::string value; 
+    T value; 
+    std::string type = "none";
     bool has_expiry = false; 
     std::chrono::time_point<std::chrono::steady_clock> expiry_time;
 }; 
