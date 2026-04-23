@@ -215,7 +215,8 @@ void* handle_client(void* sock_fd) {
                 auto stream_key = args[0], entryID = args[1]; 
                 auto pos = entryID.find('-'); 
                 long long timestamp = std::stoll(entryID.substr(0, pos));   
-                long long seqNo = std::stoll(entryID.substr(pos+1));  
+                long long seqNo = std::stoll(entryID.substr(pos+1));   
+                std::cout << "timestamp : " << timestamp << " seq no : " << seqNo << std::endl; 
                 bool isError = false; 
                 if (timestamp < lastTimestamp) isError = true; 
                 else if (timestamp == lastTimestamp) { 
