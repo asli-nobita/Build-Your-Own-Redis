@@ -235,7 +235,9 @@ void* handle_client(void* sock_fd) {
                     if (!std::holds_alternative<RedisStream>(db[stream_key].value)) {
                         db[stream_key].type = "stream";
                         db[stream_key].value = RedisStream();
-                    }   
+                    }    
+                    lastTimestamp = timestamp; 
+                    lastSqNo = seqNo;
                     auto& stream = std::get<RedisStream>(db[stream_key].value).entries; 
                     if (stream.find(entryID) == stream.end()) { 
                     }
