@@ -223,6 +223,7 @@ void* handle_client(void* sock_fd) {
                     // check sequence number 
                     if (seqNo <= lastSqNo) isError = true; 
                 }
+                std::cout << isError << std::endl; 
                 std::string msg;  
                 if (timestamp == 0 && seqNo == 0) { 
                     msg = "-ERR The ID specified in XADD must be greater than 0-0\r\n"; 
